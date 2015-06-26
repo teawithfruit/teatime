@@ -1,6 +1,7 @@
 'use strict';
 
 process.binding('http_parser').HTTPParser = require('http-parser-js').HTTPParser;
+process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
 
 var Teatime = undefined;
 
@@ -42,10 +43,11 @@ Teatime.prototype.open = function(theUrl) {
   if(!this.options.domain) this.options.domain = theUrl.match(matchHostname)[0];
   var urlParsed = url.parse(theUrl);
 
-  if(urlParsed.href && /http|https/.test(urlParsed.protocol)) {
+  visited.push(urlParsed.href);
+
+  if(urlParsed.href && /http|https/.test(urlParsed.protocol) && !/application|image|video/.test(mime.lookup(urlParsed.href)) ) {
     request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true })
     .then(function(response) {
-      visited.push(urlParsed.href);
 
       if(response.request._redirect.redirects.length <= 0) {
         var testDomain = new RegExp(that.options.domain, 'g');
