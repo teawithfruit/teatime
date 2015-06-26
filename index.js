@@ -48,7 +48,11 @@ Teatime.prototype.open = function(theUrl) {
   visited.push(urlParsed.href);
 
   if(urlParsed.href && /http|https/.test(urlParsed.protocol)) {
-    r.get(urlParsed.href).once('data', function(chunk) {
+    r.get({ url: urlParsed.href, timeout: 30000 })
+    .on('error', function(err) {
+      console.log('first request: ' + err);
+    })
+    .once('data', function(chunk) {
       var theFileType = undefined;
 
       theFileType = fileType(chunk);
@@ -56,7 +60,7 @@ Teatime.prototype.open = function(theUrl) {
       this.abort();
 
       if(!/application|image|video/.test(theFileType) ) {
-        request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true })
+        request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: 30000 })
         .then(function(response) {
 
           if(response.request._redirect.redirects.length <= 0) {
@@ -97,7 +101,7 @@ Teatime.prototype.open = function(theUrl) {
           if(that.options.crawl == true) that.crawl();
         })
         .catch(function (error) {
-          console.log(error);
+          console.log('second request: ' + error);
         });
       } else {
         if(that.options.crawl == true) that.crawl();
