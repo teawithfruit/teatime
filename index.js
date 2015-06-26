@@ -51,6 +51,8 @@ Teatime.prototype.open = function(theUrl) {
     r.get({ url: urlParsed.href, timeout: 30000 })
     .on('error', function(err) {
       console.log('first request: ' + err);
+
+      if(that.options.crawl == true) that.crawl();
     })
     .once('data', function(chunk) {
       var theFileType = undefined;
@@ -102,6 +104,8 @@ Teatime.prototype.open = function(theUrl) {
         })
         .catch(function (error) {
           console.log('second request: ' + error);
+
+          if(that.options.crawl == true) that.crawl();
         });
       } else {
         if(that.options.crawl == true) that.crawl();
