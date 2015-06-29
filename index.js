@@ -10,7 +10,6 @@ var r = require('request');
 var request = require('request-promise');
 var cheerio = require('cheerio');
 var fs = require('fs-extra');
-var mime = require('mime-types');
 var fileType = require('file-type');
 var util = require('util');
 var url = require('url');
@@ -20,7 +19,7 @@ var helpers = require('./lib/helpers');
 
 var pending = [];
 var visited = [];
-var theData = [];
+var theData = {};
 
 var matchURLs = /\shref=(?:(?:'([^']*)')|(?:"([^"]*)")|([^\s]*))/g;
 var matchHostname = /(?!(w+)\.)\w*(?:\w+\.)+\w+/i;
@@ -55,7 +54,10 @@ Teatime.prototype.open = function(theUrl) {
       if(that.options.crawl == true) that.crawl();
     })
     .once('data', function(chunk) {
+      var theLinks = [];
+      var theStatus = undefined;
       var theFileType = undefined;
+      var theLength = 0;
 
       theFileType = fileType(chunk);
       if(theFileType) theFileType = theFileType.mime;
@@ -74,7 +76,6 @@ Teatime.prototype.open = function(theUrl) {
                 var newUrls = $('a');
 
                 if(that.options.crawl == true && newUrls != null) {
-                  
                   $(newUrls).each(function(i, link) {
                     if($(link).attr('href') != undefined) {
                       var theNew = url.parse($(link).attr('href')).href;
@@ -88,6 +89,7 @@ Teatime.prototype.open = function(theUrl) {
                         theNew = theNew.replace(/\;.*$/, '');
                       }
 
+                      theLinks.push(theNew);
                       if(pending.indexOf(theNew) == -1 && visited.indexOf(theNew) == -1 && !/mailto:|javascript/i.test(theNew) && theNew != undefined && theNew != null) pending.push(theNew);
                     }
                   });
@@ -95,11 +97,20 @@ Teatime.prototype.open = function(theUrl) {
               }
 
             }
+
+            theStatus = response.statusCode;
+            theFileType = response.headers['content-type'];
+            theLength = response.headers['content-length'];
           } else {
+            theLinks.push(response.request._redirect.redirects[0]['redirectUri']);
+            theStatus = response.request._redirect.redirects[0]['statusCode'];
             if(visited.indexOf(response.request._redirect.redirects[0]['redirectUri']) == -1) pending.unshift(response.request._redirect.redirects[0]['redirectUri']);
           }
+
+          return { status: theStatus, type: theFileType, length: theLength };
         })
-        .then(function() {
+        .then(function(response) {
+          theData[theUrl] = { status: response.status, mime: response.type, length: response.length, links: theLinks };
           if(that.options.crawl == true) that.crawl();
         })
         .catch(function (error) {
@@ -110,13 +121,16 @@ Teatime.prototype.open = function(theUrl) {
       } else {
         if(that.options.crawl == true) that.crawl();
       }
+    })
+    .on('response', function(response) {
+      if(response.headers['connection'] == 'close' && response.headers['content-length'] <= 0) this.abort();
+
+      theData[theUrl] = { status: response.statusCode, mime: response.headers['content-type'], length: response.headers['content-length'], links: [] };
+      if(that.options.crawl == true) that.crawl();
     });
   } else {
     if(that.options.crawl == true) that.crawl();
   }
-
-
-
 };
 
 Teatime.prototype.crawl = function() {
@@ -129,6 +143,6 @@ Teatime.prototype.crawl = function() {
 
     this.open(next);
   } else {
-    console.log(visited);
+    console.log(theData);
   }
 };
