@@ -53,6 +53,13 @@ Teatime.prototype.open = function(theUrl) {
 
       if(that.options.crawl == true) that.crawl();
     })
+    .on('end', function() {
+      if(this.response.connection._writableState.ended) {
+        theData[theUrl] = { status: this.response.statusCode, mime: this.response.headers['content-type'], length: this.response.headers['content-length'], links: [] };
+        this.abort();
+        if(that.options.crawl == true) that.crawl();
+      } 
+    })
     .once('data', function(chunk) {
       var theLinks = [];
       var theStatus = undefined;
@@ -63,7 +70,7 @@ Teatime.prototype.open = function(theUrl) {
       if(theFileType) theFileType = theFileType.mime;
       this.abort();
 
-      if(!/application|image|video/.test(theFileType) ) {
+      if(!/application|image|video/.test(theFileType)) {
         request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: 30000 })
         .then(function(response) {
 
@@ -121,12 +128,6 @@ Teatime.prototype.open = function(theUrl) {
       } else {
         if(that.options.crawl == true) that.crawl();
       }
-    })
-    .on('response', function(response) {
-      if(response.headers['connection'] == 'close' && response.headers['content-length'] <= 0) this.abort();
-
-      theData[theUrl] = { status: response.statusCode, mime: response.headers['content-type'], length: response.headers['content-length'], links: [] };
-      if(that.options.crawl == true) that.crawl();
     });
   } else {
     if(that.options.crawl == true) that.crawl();
