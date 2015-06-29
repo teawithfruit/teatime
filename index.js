@@ -96,7 +96,7 @@ Teatime.prototype.open = function(theUrl) {
 
             }
           } else {
-            pending.unshift(response.request._redirect.redirects[0]['redirectUri']);
+            if(visited.indexOf(response.request._redirect.redirects[0]['redirectUri']) == -1) pending.unshift(response.request._redirect.redirects[0]['redirectUri']);
           }
         })
         .then(function() {
