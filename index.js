@@ -25,7 +25,8 @@ var matchURLs = /\shref=(?:(?:'([^']*)')|(?:"([^"]*)")|([^\s]*))/g;
 var matchHostname = /(?!(w+)\.)\w*(?:\w+\.)+\w+/i;
 
 var DEFAULTS = {
-  crawl: false
+  crawl: false,
+  getVariables: false
 };
 
 module.exports = Teatime = function(options) {
@@ -91,7 +92,7 @@ Teatime.prototype.open = function(theUrl) {
                       if(theNew && url.parse(theNew).host == null) theNew = helpers.absoluteUri(response.request.uri.href, theNew);
 
                       if(theNew) {
-                        theNew = theNew.replace(/\?.*$/, '');
+                        if(that.options.getVariables == true) theNew = theNew.replace(/\?.*$/, '');
                         theNew = theNew.replace(/\#.*$/, '');
                         theNew = theNew.replace(/\;.*$/, '');
                       }
