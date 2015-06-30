@@ -43,12 +43,13 @@ Teatime.prototype.open = function(theUrl) {
   var that = this;
 
   if(!this.options.domain) this.options.domain = theUrl.match(matchHostname)[0];
+  if(!this.options.cookie) this.options.cookie = r.jar();
   var urlParsed = url.parse(theUrl);
 
   visited.push(urlParsed.href);
 
   if(urlParsed.href && /http|https/.test(urlParsed.protocol)) {
-    r.get({ url: urlParsed.href, timeout: 30000 })
+    r.get({ url: urlParsed.href, timeout: 30000, jar: this.options.cookie })
     .on('error', function(err) {
       console.log('first request: ' + err);
 
@@ -72,7 +73,7 @@ Teatime.prototype.open = function(theUrl) {
       this.abort();
 
       if(!/application|image|video/.test(theFileType)) {
-        request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: 30000 })
+        request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: 30000, jar: that.options.cookie })
         .then(function(response) {
 
           if(response.request._redirect.redirects.length <= 0) {
