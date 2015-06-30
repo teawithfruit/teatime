@@ -93,7 +93,7 @@ Teatime.prototype.open = function(theUrl) {
                       if(theNew && url.parse(theNew).host == null) theNew = helpers.absoluteUri(response.request.uri.href, theNew);
 
                       if(theNew) {
-                        if(that.options.getVariables == true) theNew = theNew.replace(/\?.*$/, '');
+                        if(that.options.getVariables == false) theNew = theNew.replace(/\?.*$/, '');
                         theNew = theNew.replace(/\#.*$/, '');
                         theNew = theNew.replace(/\;.*$/, '');
                       }
