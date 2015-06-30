@@ -98,7 +98,7 @@ Teatime.prototype.open = function(theUrl) {
                         theNew = theNew.replace(/\;.*$/, '');
                       }
 
-                      theLinks.push(theNew);
+                      if(theNew && theLinks.indexOf(theNew) == -1) theLinks.push(theNew);
                       if(pending.indexOf(theNew) == -1 && visited.indexOf(theNew) == -1 && !/mailto:|javascript/i.test(theNew) && theNew != undefined && theNew != null) pending.push(theNew);
                     }
                   });
