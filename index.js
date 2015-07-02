@@ -24,9 +24,13 @@ var theData = {};
 var matchURLs = /\shref=(?:(?:'([^']*)')|(?:"([^"]*)")|([^\s]*))/g;
 var matchHostname = /(\.|\/\/)(?!(w+)\.)\S*(?:\w+\.)+\w+/i;
 
+var userAgentPrefix = 'Mozilla/5.0 (Unknown; Linux i686) AppleWebKit/534.34 (KHTML, like Gecko) Safari/534.34';
+
 var DEFAULTS = {
   crawl: false,
-  getVariables: false
+  getVariables: false,
+  timeout: 30000,
+  userAgent: 'teatime spider'
 };
 
 module.exports = Teatime = function(options) {
@@ -49,7 +53,7 @@ Teatime.prototype.open = function(theUrl) {
   visited.push(urlParsed.href);
 
   if(urlParsed.href && /http|https/.test(urlParsed.protocol)) {
-    r.get({ url: urlParsed.href, timeout: 30000, jar: this.options.cookie })
+    r.get({ url: urlParsed.href, timeout: that.options.timeout, jar: this.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
     .on('error', function(err) {
       console.log('first request: ' + err);
 
@@ -73,7 +77,7 @@ Teatime.prototype.open = function(theUrl) {
       this.abort();
 
       if(!/application|image|video/.test(theFileType)) {
-        request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: 30000, jar: that.options.cookie })
+        request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: that.options.timeout, jar: that.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
         .then(function(response) {
 
           if(response.request._redirect.redirects.length <= 0) {
