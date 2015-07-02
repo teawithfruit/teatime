@@ -22,7 +22,7 @@ var visited = [];
 var theData = {};
 
 var matchURLs = /\shref=(?:(?:'([^']*)')|(?:"([^"]*)")|([^\s]*))/g;
-var matchHostname = /(\.|\/\/)(?!(w+)\.)\w*(?:\w+\.)+\w+/i;
+var matchHostname = /(\.|\/\/)(?!(w+)\.)\S*(?:\w+\.)+\w+/i;
 
 var DEFAULTS = {
   crawl: false,
