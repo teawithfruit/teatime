@@ -1,6 +1,8 @@
 'use strict';
 
 var Teatime = require('../');
-var teatime = new Teatime({ crawl: true, getVariables: false, timeout: 30000, userAgent: 'teatime spider' });
+var teatime = new Teatime('http://www.teawithfruit.com/', { crawl: true, getVariables: false, timeout: 30000, userAgent: 'teatime spider' });
 
-teatime.open('http://www.teawithfruit.com/');
+teatime.then(function(data) {
+  console.log(data);
+});

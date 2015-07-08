@@ -26,6 +26,7 @@ var matchHostname = /(\.|\/\/)(?!(w+)\.)\S*(?:\w+\.)+\w+/i;
 
 var userAgentPrefix = 'Mozilla/5.0 (Unknown; Linux i686) AppleWebKit/534.34 (KHTML, like Gecko) Safari/534.34';
 
+var startUrl = undefined;
 var DEFAULTS = {
   crawl: false,
   getVariables: false,
@@ -33,14 +34,15 @@ var DEFAULTS = {
   userAgent: 'teatime spider'
 };
 
-module.exports = Teatime = function(options) {
+var deferred = Q.defer();
+
+module.exports = Teatime = function(url, options) {
+  this.startUrl = url;
   this.options = defaults(options, DEFAULTS);
+  
+  this.open(this.startUrl);
 
-  return this.init();
-};
-
-Teatime.prototype.init = function() {
-  return 'fdsgdsfg';
+  return deferred.promise;
 };
 
 Teatime.prototype.open = function(theUrl) {
@@ -55,15 +57,15 @@ Teatime.prototype.open = function(theUrl) {
   if(urlParsed.href && /http|https/.test(urlParsed.protocol)) {
     r.get({ url: urlParsed.href, timeout: that.options.timeout, jar: this.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
     .on('error', function(err) {
-      console.log('first request: ' + err);
+      theData[theUrl] = { status: err, mime: null, length: null, links: [] };
 
-      if(that.options.crawl == true) that.crawl();
+      that.crawl();
     })
     .on('end', function() {
       if(this.response.connection._writableState.ended) {
         theData[theUrl] = { status: this.response.statusCode, mime: this.response.headers['content-type'], length: this.response.headers['content-length'], links: [] };
         this.abort();
-        if(that.options.crawl == true) that.crawl();
+        that.crawl();
       } 
     })
     .once('data', function(chunk) {
@@ -124,32 +126,34 @@ Teatime.prototype.open = function(theUrl) {
         })
         .then(function(response) {
           theData[theUrl] = { status: response.status, mime: response.type, length: response.length, links: theLinks };
-          if(that.options.crawl == true) that.crawl();
+          that.crawl();
         })
-        .catch(function (error) {
-          console.log('second request: ' + error);
+        .catch(function(error) {
+          theData[theUrl] = { status: error, mime: null, length: null, links: [] };
 
-          if(that.options.crawl == true) that.crawl();
+          that.crawl();
         });
       } else {
-        if(that.options.crawl == true) that.crawl();
+        that.crawl();
       }
     });
   } else {
-    if(that.options.crawl == true) that.crawl();
+    that.crawl();
   }
 };
 
 Teatime.prototype.crawl = function() {
   var next = undefined;
 
-  if(pending.length > 0) {
-    next = pending.shift();
-    console.log('Pending: ' + pending.length);
-    console.log(next);
+  if(this.options.crawl == true) {
+    if(pending.length > 0) {
+      next = pending.shift();
 
-    this.open(next);
+      this.open(next);
+    } else {
+      deferred.resolve(theData);
+    }
   } else {
-    console.log(theData);
+    deferred.resolve(theData);
   }
 };
