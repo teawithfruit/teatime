@@ -72,6 +72,7 @@ Teatime.prototype.open = function(theUrl) {
       var theLinks = [];
       var theStatus = undefined;
       var theFileType = undefined;
+      var theBody = undefined;
       var theLength = 0;
 
       theFileType = fileType(chunk);
@@ -116,16 +117,17 @@ Teatime.prototype.open = function(theUrl) {
             theStatus = response.statusCode;
             theFileType = response.headers['content-type'];
             theLength = response.headers['content-length'];
+            theBody = response.body;
           } else {
             theLinks.push(response.request._redirect.redirects[0]['redirectUri']);
             theStatus = response.request._redirect.redirects[0]['statusCode'];
             if(visited.indexOf(response.request._redirect.redirects[0]['redirectUri']) == -1) pending.unshift(response.request._redirect.redirects[0]['redirectUri']);
           }
 
-          return { status: theStatus, type: theFileType, length: theLength };
+          return { status: theStatus, type: theFileType, length: theLength, body: theBody };
         })
         .then(function(response) {
-          theData[theUrl] = { status: response.status, mime: response.type, length: response.length, links: theLinks };
+          theData[theUrl] = { status: response.status, mime: response.type, length: response.length, body: response.body, links: theLinks };
           that.crawl();
         })
         .catch(function(error) {
