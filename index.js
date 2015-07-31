@@ -1,8 +1,8 @@
 'use strict';
 
+process.setMaxListeners(0);
 process.binding('http_parser').HTTPParser = require('http-parser-js').HTTPParser;
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
-process.setMaxListeners(0);
 
 var Teatime = undefined;
 
