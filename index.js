@@ -11,6 +11,7 @@ var r = require('request');
 var request = require('request-promise');
 var cheerio = require('cheerio');
 var fs = require('fs-extra');
+var path = require('path');
 var fileType = require('file-type');
 var util = require('util');
 var url = require('url');
@@ -20,7 +21,10 @@ var helpers = require('./lib/helpers');
 
 var pending = [];
 var visited = [];
-var theData = {};
+var theData = undefined;
+var writeIt = undefined;
+var theDataStream = fs.createWriteStream(path.resolve(__dirname, 'theData.json'));
+theDataStream.write('{\n');
 
 var matchURLs = /\shref=(?:(?:'([^']*)')|(?:"([^"]*)")|([^\s]*))/g;
 var matchHostname = /(\.|\/\/)(?!(w+)\.)\S*(?:\w+\.)+\w+/i;
@@ -48,6 +52,7 @@ module.exports = Teatime = function(url, options) {
 
 Teatime.prototype.open = function(theUrl) {
   var that = this;
+  var theData = {};
 
   if(!this.options.domain) this.options.domain = theUrl.match(matchHostname)[0];
   if(!this.options.cookie) this.options.cookie = r.jar();
@@ -59,12 +64,17 @@ Teatime.prototype.open = function(theUrl) {
     r.get({ url: urlParsed.href, timeout: that.options.timeout, jar: this.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
     .on('error', function(err) {
       theData[theUrl] = { status: err, mime: null, length: null, links: [] };
+      writeIt = JSON.stringify(theData);
+      theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
 
       that.crawl();
     })
     .on('end', function() {
       if(this.response.connection._writableState.ended) {
         theData[theUrl] = { status: this.response.statusCode, mime: this.response.headers['content-type'], length: this.response.headers['content-length'], links: [] };
+        writeIt = JSON.stringify(theData);
+        theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
+
         this.abort();
         that.crawl();
       } 
@@ -129,10 +139,15 @@ Teatime.prototype.open = function(theUrl) {
         })
         .then(function(response) {
           theData[theUrl] = { status: response.status, mime: response.type, length: response.length, body: response.body, links: theLinks };
+          writeIt = JSON.stringify(theData);
+          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
+
           that.crawl();
         })
         .catch(function(error) {
           theData[theUrl] = { status: error, mime: null, length: null, links: [] };
+          writeIt = JSON.stringify(theData);
+          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
 
           that.crawl();
         });
@@ -154,9 +169,15 @@ Teatime.prototype.crawl = function() {
 
       this.open(next);
     } else {
-      deferred.resolve(theData);
+      theDataStream.end('}');
     }
   } else {
-    deferred.resolve(theData);
+    theDataStream.end('}');
   }
 };
+
+theDataStream.on('finish', function() {
+  var loaded = fs.readFileSync(path.resolve(__dirname, 'theData.json'), 'utf8');
+  loaded = loaded.substr(0, loaded.length - 3) + '}';
+  deferred.resolve(JSON.parse(loaded));
+});
