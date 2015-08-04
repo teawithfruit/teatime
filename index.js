@@ -14,6 +14,7 @@ var fs = require('fs-extra');
 var path = require('path');
 var fileType = require('file-type');
 var util = require('util');
+var crypto = require('crypto');
 var url = require('url');
 var EventEmitter = require('events').EventEmitter;
 var defaults = require('defaults');
@@ -23,8 +24,7 @@ var pending = [];
 var visited = [];
 var theData = undefined;
 var writeIt = undefined;
-var theDataStream = fs.createWriteStream(path.resolve(__dirname, 'theData.json'));
-theDataStream.write('{\n');
+var theDataStream = undefined;
 
 var matchURLs = /\shref=(?:(?:'([^']*)')|(?:"([^"]*)")|([^\s]*))/g;
 var matchHostname = /(\.|\/\/)(?!(w+)\.)\S*(?:\w+\.)+\w+/i;
@@ -32,6 +32,7 @@ var matchHostname = /(\.|\/\/)(?!(w+)\.)\S*(?:\w+\.)+\w+/i;
 var userAgentPrefix = 'Mozilla/5.0 (Unknown; Linux i686) AppleWebKit/534.34 (KHTML, like Gecko) Safari/534.34';
 
 var startUrl = undefined;
+var startUrlParsed = undefined;
 var DEFAULTS = {
   crawl: false,
   getVariables: false,
@@ -41,10 +42,21 @@ var DEFAULTS = {
 
 var deferred = Q.defer();
 
-module.exports = Teatime = function(url, options) {
-  this.startUrl = url;
+module.exports = Teatime = function(initURL, options) {
+  var that = this;
+  this.startUrl = initURL;
+  this.startUrlParsed = url.parse(this.startUrl);
   this.options = defaults(options, DEFAULTS);
   
+  fs.ensureDir(path.resolve(__dirname, 'file', this.startUrlParsed.hostname));
+  theDataStream = fs.createWriteStream(path.resolve(__dirname, 'file', this.startUrlParsed.hostname, 'theData.json'));
+  theDataStream.write('{\n');
+  theDataStream.on('finish', function() {
+    var loaded = fs.readFileSync(path.resolve(__dirname, 'file', that.startUrlParsed.hostname, 'theData.json'), 'utf8');
+    loaded = loaded.substr(0, loaded.length - 3) + '}';
+    deferred.resolve(JSON.parse(loaded));
+  });
+
   this.open(this.startUrl);
 
   return deferred.promise;
@@ -125,10 +137,14 @@ Teatime.prototype.open = function(theUrl) {
 
             }
 
+            
             theStatus = response.statusCode;
             theFileType = response.headers['content-type'];
             theLength = response.headers['content-length'];
-            theBody = response.body;
+
+            var filename = crypto.createHash('sha1').update(theUrl).digest("hex");
+            fs.writeFileSync(path.resolve(__dirname, 'file', that.startUrlParsed.hostname, filename), response.body);
+            theBody = path.resolve(__dirname, 'file', that.startUrlParsed.hostname, filename);
           } else {
             theLinks.push(response.request._redirect.redirects[0]['redirectUri']);
             theStatus = response.request._redirect.redirects[0]['statusCode'];
@@ -175,9 +191,3 @@ Teatime.prototype.crawl = function() {
     theDataStream.end('}');
   }
 };
-
-theDataStream.on('finish', function() {
-  var loaded = fs.readFileSync(path.resolve(__dirname, 'theData.json'), 'utf8');
-  loaded = loaded.substr(0, loaded.length - 3) + '}';
-  deferred.resolve(JSON.parse(loaded));
-});
