@@ -48,7 +48,7 @@ module.exports = Teatime = function(initURL, options) {
   this.startUrlParsed = url.parse(this.startUrl);
   this.options = defaults(options, DEFAULTS);
   
-  fs.ensureDir(path.resolve(__dirname, 'file', this.startUrlParsed.hostname));
+  fs.ensureDirSync(path.resolve(__dirname, 'file', this.startUrlParsed.hostname));
   theDataStream = fs.createWriteStream(path.resolve(__dirname, 'file', this.startUrlParsed.hostname, 'theData.json'));
   theDataStream.write('{\n');
   theDataStream.on('finish', function() {
