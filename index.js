@@ -22,6 +22,7 @@ var helpers = require('./lib/helpers');
 
 var pending = [];
 var visited = [];
+var promises = [];
 var theData = undefined;
 var writeIt = undefined;
 var theDataStream = undefined;
@@ -98,6 +99,9 @@ Teatime.prototype.open = function(theUrl) {
       var theBody = undefined;
       var theLength = 0;
 
+      var workerPromise = Q.defer();
+      promises.push(workerPromise.promise);
+
       theFileType = fileType(chunk);
       if(theFileType) theFileType = theFileType.mime;
       this.abort();
@@ -158,6 +162,7 @@ Teatime.prototype.open = function(theUrl) {
           writeIt = JSON.stringify(theData);
           theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
 
+          workerPromise.resolve();
           that.crawl();
         })
         .catch(function(error) {
@@ -185,9 +190,15 @@ Teatime.prototype.crawl = function() {
 
       this.open(next);
     } else {
-      theDataStream.end('}');
+      Q.allSettled(promises)
+      .then(function() {
+        theDataStream.end('}');
+      });
     }
   } else {
-    theDataStream.end('}');
+    Q.allSettled(promises)
+    .then(function() {
+      theDataStream.end('}');
+    });
   }
 };
