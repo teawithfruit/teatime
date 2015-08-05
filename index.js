@@ -170,9 +170,11 @@ Teatime.prototype.open = function(theUrl) {
           writeIt = JSON.stringify(theData);
           theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
 
+          workerPromise.resolve();
           that.crawl();
         });
       } else {
+        workerPromise.resolve();
         that.crawl();
       }
     });
