@@ -60,6 +60,14 @@ module.exports = Teatime = function(initURL, options) {
 
   this.open(this.startUrl);
 
+  /* Direct return
+  Q.nfcall(fs.readFile, path.resolve(__dirname, 'file', 'DIRECTORY', 'theData.json'), 'utf8')
+  .then(function(data) {
+      var loaded = data.substr(0, data.length - 3) + '}';
+      deferred.resolve(JSON.parse(loaded));
+  });
+  */
+
   return deferred.promise;
 };
 
