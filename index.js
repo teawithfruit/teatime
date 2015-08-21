@@ -41,9 +41,9 @@ var DEFAULTS = {
   userAgent: 'teatime spider'
 };
 
-var deferred = Q.defer();
-
 module.exports = Teatime = function(initURL, options) {
+  var deferred = Q.defer();
+
   var that = this;
   this.startUrl = initURL;
   this.startUrlParsed = url.parse(this.startUrl);
