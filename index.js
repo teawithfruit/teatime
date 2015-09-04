@@ -202,13 +202,17 @@ Teatime.prototype.crawl = function() {
     } else {
       Q.allSettled(promises)
       .then(function() {
-        theDataStream.end('}');
+        setTimeout(function () {
+          theDataStream.end('}');
+        }, 5000);
       });
     }
   } else {
     Q.allSettled(promises)
     .then(function() {
-      theDataStream.end('}');
+      setTimeout(function () {
+        theDataStream.end('}');
+      }, 5000);
     });
   }
 };
