@@ -168,18 +168,18 @@ Teatime.prototype.open = function(theUrl) {
         .then(function(response) {
           theData[theUrl] = { status: response.status, mime: response.type, length: response.length, body: response.body, links: theLinks };
           writeIt = JSON.stringify(theData);
-          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
-
-          workerPromise.resolve();
-          that.crawl();
+          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n', function() {
+            workerPromise.resolve();
+            that.crawl();
+          });
         })
         .catch(function(error) {
           theData[theUrl] = { status: error, mime: null, length: null, links: [] };
           writeIt = JSON.stringify(theData);
-          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
-
-          workerPromise.resolve();
-          that.crawl();
+          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n', function() {
+            workerPromise.resolve();
+            that.crawl();
+          });
         });
       } else {
         workerPromise.resolve();
