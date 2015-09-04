@@ -72,6 +72,9 @@ module.exports = Teatime = function(initURL, options) {
 };
 
 Teatime.prototype.open = function(theUrl) {
+  var workerPromise = Q.defer();
+  promises.push(workerPromise.promise);
+
   var that = this;
   var theData = {};
 
@@ -106,9 +109,6 @@ Teatime.prototype.open = function(theUrl) {
       var theFileType = undefined;
       var theBody = undefined;
       var theLength = 0;
-
-      var workerPromise = Q.defer();
-      promises.push(workerPromise.promise);
 
       theFileType = fileType(chunk);
       if(theFileType) theFileType = theFileType.mime;
@@ -187,6 +187,7 @@ Teatime.prototype.open = function(theUrl) {
       }
     });
   } else {
+    workerPromise.resolve();
     that.crawl();
   }
 };
