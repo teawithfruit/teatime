@@ -91,6 +91,7 @@ Teatime.prototype.open = function(theUrl) {
       writeIt = JSON.stringify(theData);
       theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
 
+      workerPromise.resolve();
       that.crawl();
     })
     .on('end', function() {
@@ -100,6 +101,7 @@ Teatime.prototype.open = function(theUrl) {
         theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
 
         this.abort();
+        workerPromise.resolve();
         that.crawl();
       } 
     })
