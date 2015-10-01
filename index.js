@@ -3,37 +3,33 @@
 process.setMaxListeners(0);
 process.binding('http_parser').HTTPParser = require('http-parser-js').HTTPParser;
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
+process.on('exit', function (code) {
+  console.log("Process exits with code: " + code);
+});
 
 var Teatime = undefined;
 
 var Q = require('q');
-var r = require('request');
+var r = require('request').defaults({
+  followRedirect : true,
+  pool: {
+    maxSockets: 3
+  } // TO BE EVALUATED!!!!
+});
 var request = require('request-promise');
 var cheerio = require('cheerio');
 var fs = require('fs-extra');
 var path = require('path');
 var fileType = require('file-type');
-var util = require('util');
 var crypto = require('crypto');
 var url = require('url');
-var EventEmitter = require('events').EventEmitter;
 var defaults = require('defaults');
 var helpers = require('./lib/helpers');
 
-var pending = [];
-var visited = [];
-var promises = [];
-var theData = undefined;
-var writeIt = undefined;
-var theDataStream = undefined;
-
-var matchURLs = /\shref=(?:(?:'([^']*)')|(?:"([^"]*)")|([^\s]*))/g;
 var matchHostname = /(\.|\/\/)(?!(w+)\.)\S*(?:\w+\.)+\w+/i;
 
 var userAgentPrefix = 'Mozilla/5.0 (Unknown; Linux i686) AppleWebKit/534.34 (KHTML, like Gecko) Safari/534.34';
 
-var startUrl = undefined;
-var startUrlParsed = undefined;
 var DEFAULTS = {
   crawl: false,
   getVariables: false,
@@ -41,181 +37,175 @@ var DEFAULTS = {
   userAgent: 'teatime spider'
 };
 
-module.exports = Teatime = function(initURL, options) {
-  var deferred = Q.defer();
-
-  var that = this;
+module.exports = Teatime = function (initURL, options) {
   this.startUrl = initURL;
   this.startUrlParsed = url.parse(this.startUrl);
+  this.resultPath = '';
+  var resultDir = path.resolve(__dirname, 'file', this.startUrlParsed.hostname);
+  this.resultPath = path.join(resultDir, 'theData.json');
+  fs.ensureDirSync(resultDir);
   this.options = defaults(options, DEFAULTS);
-  
-  fs.ensureDirSync(path.resolve(__dirname, 'file', this.startUrlParsed.hostname));
-  theDataStream = fs.createWriteStream(path.resolve(__dirname, 'file', this.startUrlParsed.hostname, 'theData.json'));
-  theDataStream.write('{\n');
-  theDataStream.on('finish', function() {
-    var loaded = fs.readFileSync(path.resolve(__dirname, 'file', that.startUrlParsed.hostname, 'theData.json'), 'utf8');
-    loaded = loaded.substr(0, loaded.length - 3) + '}';
-    deferred.resolve(JSON.parse(loaded));
-  });
-
-  this.open(this.startUrl);
-
-  /* Direct return
-  Q.nfcall(fs.readFile, path.resolve(__dirname, 'file', 'DIRECTORY', 'theData.json'), 'utf8')
-  .then(function(data) {
-      var loaded = data.substr(0, data.length - 3) + '}';
-      deferred.resolve(JSON.parse(loaded));
-  });
-  */
-
-  return deferred.promise;
+  this.pending = [];
+  this.visited = {};
+  this.deferred = null;
+  this.running = false;
 };
 
-Teatime.prototype.open = function(theUrl) {
-  var workerPromise = Q.defer();
-  promises.push(workerPromise.promise);
+Teatime.prototype.start = function () {
+  if (this.running) {
+    throw new Error('Crawler is already running. Wait for the end!');
+  }
+  this.deferred = Q.defer();
+  fs.writeFile(this.resultPath, '{', 'utf-8', function (err) {
+    if (err) {
+      this.running = false;
+      this.deferred.reject(err);
+    }
+    this.pending.push(this.startUrl);
+    this.crawl(true);
+  }.bind(this));
+  return this.deferred.promise;
+};
 
-  var that = this;
-  var theData = {};
+Teatime.prototype.end = function () {
+  fs.appendFile(this.resultPath, '}', 'utf-8', function (err) {
+    if (err) {
+      this.running = false;
+      this.deferred.reject(err);
+    }
+    var result = fs.readFileSync(this.resultPath, 'utf8');
+    this.running = false;
+    this.deferred.resolve(JSON.parse(result));
+  }.bind(this));
+};
 
-  if(!this.options.domain) this.options.domain = theUrl.match(matchHostname)[0];
-  if(!this.options.cookie) this.options.cookie = r.jar();
+function writeUrl(path, first, url, data, callback) {
+  for (var key in data) {
+    data[key] = encodeURI(data[key]);
+  }
+  var writeString = '\n"' + encodeURI(url) + '" : ' + JSON.stringify(data);
+  if (!first) {
+    writeString = ',' + writeString;
+  }
+  
+  fs.appendFile(path, writeString, 'utf-8', callback);
+}
+
+Teatime.prototype.open = function (first, theUrl, callback) {
+  if (!this.options.domain)
+    this.options.domain = theUrl.match(matchHostname)[0];
+  if (!this.options.cookie)
+    this.options.cookie = r.jar();
   var urlParsed = url.parse(theUrl);
+  this.visited[urlParsed.href] = true;
+  if (urlParsed.href && /http|https/.test(urlParsed.protocol)) {
+    var hadError = false;
+    var gotData = false;
+    var theFileType = undefined;
+    var req = r.get({url: urlParsed.href, timeout: this.options.timeout, jar: this.options.cookie, headers: {'User-Agent': userAgentPrefix + ' ' + this.options.userAgent}})
+            .on('error', function (err) {
+              hadError = true;
+              writeUrl(this.resultPath, first, theUrl, {status: err, mime: null, length: null, links: []}, callback);
+            }.bind(this))
+            .on('end', function () {
+              if (gotData) {
+                if (!/application|image|video/.test(theFileType)) {
+                  this.bodyRequest(first, theUrl, urlParsed, theFileType, callback);
+                } else {
+                  callback();
+                }
+              } else if (!hadError) {
+                writeUrl(this.resultPath, first, theUrl, {status: 'No data', mime: null, length: null, links: []}, callback);
+              }
+            }.bind(this))
+            .once('data', function (chunk) {
+              gotData = true;
+              
+              theFileType = fileType(chunk);
+              if (theFileType) {
+                theFileType = theFileType.mime;
+              }
+                
+              req.abort();
+            }.bind(this));
+  } else {
+    callback();
+  }
+};
 
-  visited.push(urlParsed.href);
+Teatime.prototype.checkAnchor = function (newUrls, $, requestHref, links) {
+  $(newUrls).each(function (i, link) {
+    if ($(link).attr('href') !== undefined) {
+      var theNew = url.parse($(link).attr('href')).href;
 
-  if(urlParsed.href && /http|https/.test(urlParsed.protocol)) {
-    r.get({ url: urlParsed.href, timeout: that.options.timeout, jar: this.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
-    .on('error', function(err) {
-      theData[theUrl] = { status: err, mime: null, length: null, links: [] };
-      writeIt = JSON.stringify(theData);
-      theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
+      if ($('base').attr('href') && !/^\/$/i.test(theNew) && !/^http.*$/i.test(theNew))
+        theNew = $('base').attr('href') + theNew;
+      if (theNew && url.parse(theNew).host === null)
+        theNew = helpers.absoluteUri(requestHref, theNew);
 
-      workerPromise.resolve();
-      that.crawl();
-    })
-    .on('end', function() {
-      if(this.response.connection._writableState.ended) {
-        theData[theUrl] = { status: this.response.statusCode, mime: this.response.headers['content-type'], length: this.response.headers['content-length'], links: [] };
-        writeIt = JSON.stringify(theData);
-        theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n');
+      if (theNew) {
+        if (this.options.getVariables === false)
+          theNew = theNew.replace(/\?.*$/, '');
+        theNew = theNew.replace(/\#.*$/, '');
+        theNew = theNew.replace(/\;.*$/, '');
+      }
 
-        this.abort();
-        workerPromise.resolve();
-        that.crawl();
-      } 
-    })
-    .once('data', function(chunk) {
-      var theLinks = [];
-      var theStatus = undefined;
-      var theFileType = undefined;
-      var theBody = undefined;
-      var theLength = 0;
+      if (theNew && links.indexOf(theNew) === -1)
+        links.push(theNew);
+      if (this.pending.indexOf(theNew) === -1 && !this.visited[theNew] && !/mailto:|javascript/i.test(theNew) && theNew !== undefined && theNew !== null)
+        this.pending.push(theNew);
+    }
+  }.bind(this));
+};
 
-      theFileType = fileType(chunk);
-      if(theFileType) theFileType = theFileType.mime;
-      this.abort();
+Teatime.prototype.bodyRequest = function (first, theUrl, urlParsed, fileType, callback) {
+  var theLinks = [];
 
-      if(!/application|image|video/.test(theFileType)) {
-        request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: that.options.timeout, jar: that.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
-        .then(function(response) {
+  request({uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: this.options.timeout, jar: this.options.cookie, headers: {'User-Agent': userAgentPrefix + ' ' + this.options.userAgent}})
+          .then(function (response) {
+            var theStatus, theLength = 0, bodyPath, filename = crypto.createHash('sha1').update(theUrl).digest("hex");
 
-          if(response.request._redirect.redirects.length <= 0) {
-            var testDomain = new RegExp(that.options.domain, 'g');
-            if(testDomain.test(response.request.uri.href.match(matchHostname)[0])) {
-              if(/text\/html|text\/xml/.test(response.headers['content-type'])) {
+            if (response.request._redirect.redirects.length <= 0) {
+              var testDomain = new RegExp(this.options.domain, 'g');
+              if (testDomain.test(response.request.uri.href.match(matchHostname)[0])
+                      && /text\/html|text\/xml/.test(response.headers['content-type'])) {
 
                 var $ = cheerio.load(response.body);
                 var newUrls = $('a');
 
-                if(that.options.crawl == true && newUrls != null) {
-                  $(newUrls).each(function(i, link) {
-                    if($(link).attr('href') != undefined) {
-                      var theNew = url.parse($(link).attr('href')).href;
-
-                      if($('base').attr('href') && !/^\/$/i.test(theNew) && !/^http.*$/i.test(theNew)) theNew = $('base').attr('href') + theNew;
-                      if(theNew && url.parse(theNew).host == null) theNew = helpers.absoluteUri(response.request.uri.href, theNew);
-
-                      if(theNew) {
-                        if(that.options.getVariables == false) theNew = theNew.replace(/\?.*$/, '');
-                        theNew = theNew.replace(/\#.*$/, '');
-                        theNew = theNew.replace(/\;.*$/, '');
-                      }
-
-                      if(theNew && theLinks.indexOf(theNew) == -1) theLinks.push(theNew);
-                      if(pending.indexOf(theNew) == -1 && visited.indexOf(theNew) == -1 && !/mailto:|javascript/i.test(theNew) && theNew != undefined && theNew != null) pending.push(theNew);
-                    }
-                  });
+                if (this.options.crawl === true && newUrls !== null) {
+                  this.checkAnchor(newUrls, $, response.request.uri.href, theLinks);
                 }
               }
 
+              theStatus = response.statusCode;
+              fileType = response.headers['content-type'];
+              theLength = response.headers['content-length'];
+
+              bodyPath = path.resolve(__dirname, 'file', this.startUrlParsed.hostname, filename);
+              fs.writeFileSync(bodyPath, response.body);
+            } else {
+              theLinks.push(response.request._redirect.redirects[0]['redirectUri']);
+              theStatus = response.request._redirect.redirects[0]['statusCode'];
+              if (!this.visited[response.request._redirect.redirects[0]['redirectUri']]) {
+                this.pending.unshift(response.request._redirect.redirects[0]['redirectUri']);
+              }
             }
-
-            
-            theStatus = response.statusCode;
-            theFileType = response.headers['content-type'];
-            theLength = response.headers['content-length'];
-
-            var filename = crypto.createHash('sha1').update(theUrl).digest("hex");
-            fs.writeFileSync(path.resolve(__dirname, 'file', that.startUrlParsed.hostname, filename), response.body);
-            theBody = path.resolve(__dirname, 'file', that.startUrlParsed.hostname, filename);
-          } else {
-            theLinks.push(response.request._redirect.redirects[0]['redirectUri']);
-            theStatus = response.request._redirect.redirects[0]['statusCode'];
-            if(visited.indexOf(response.request._redirect.redirects[0]['redirectUri']) == -1) pending.unshift(response.request._redirect.redirects[0]['redirectUri']);
-          }
-
-          return { status: theStatus, type: theFileType, length: theLength, body: theBody };
-        })
-        .then(function(response) {
-          theData[theUrl] = { status: response.status, mime: response.type, length: response.length, body: response.body, links: theLinks };
-          writeIt = JSON.stringify(theData);
-          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n', function() {
-            workerPromise.resolve();
-            that.crawl();
-          });
-        })
-        .catch(function(error) {
-          theData[theUrl] = { status: error, mime: null, length: null, links: [] };
-          writeIt = JSON.stringify(theData);
-          theDataStream.write(writeIt.substr(1, writeIt.length - 2) + ',\n', function() {
-            workerPromise.resolve();
-            that.crawl();
-          });
-        });
-      } else {
-        workerPromise.resolve();
-        that.crawl();
-      }
-    });
-  } else {
-    workerPromise.resolve();
-    that.crawl();
-  }
+            writeUrl(this.resultPath, first, theUrl, {status: theStatus, mime: fileType, length: theLength, body: bodyPath, links: theLinks}, callback);
+          }.bind(this))
+          .catch(function (error) {
+            console.log("ERROR BODY REQUEST");
+            console.log(error);
+            writeUrl(this.resultPath, first, theUrl, {status: error, mime: null, length: null, links: []}, callback);
+          }.bind(this));
 };
 
-Teatime.prototype.crawl = function() {
-  var next = undefined;
-
-  if(this.options.crawl == true) {
-    if(pending.length > 0) {
-      next = pending.shift();
-
-      this.open(next);
-    } else {
-      Q.allSettled(promises)
-      .then(function() {
-        setTimeout(function () {
-          theDataStream.end('}');
-        }, 5000);
-      });
-    }
+Teatime.prototype.crawl = function (first) {
+  first = first || false;
+  
+  if (this.options.crawl === true && this.pending.length > 0) {
+    this.open(first, this.pending.shift(), this.crawl.bind(this));
   } else {
-    Q.allSettled(promises)
-    .then(function() {
-      setTimeout(function () {
-        theDataStream.end('}');
-      }, 5000);
-    });
+    this.end();
   }
 };
