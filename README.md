@@ -1,5 +1,5 @@
 # Teatime
-A module to generate a json map of choosen website.
+A Node.js module to generate a json map of a choosen website.
 
 ##How to use
 ```
