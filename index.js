@@ -97,8 +97,8 @@ Teatime.prototype.open = function(theUrl) {
         theData[theUrl] = { status: this.response.statusCode, mime: this.response.headers['content-type'], length: this.response.headers['content-length'], links: [] };
         writeIt = JSON.stringify(theData);
 
+        this.abort();
         fs.appendFile(that.resultPath, writeIt.substr(1, writeIt.length - 2) + ',\n', 'utf8', function() {
-          that.abort();
           workerPromise.resolve();
           that.crawl();
         });
@@ -113,7 +113,7 @@ Teatime.prototype.open = function(theUrl) {
 
       theFileType = fileType(chunk);
       if(theFileType) theFileType = theFileType.mime;
-      that.abort();
+      this.abort();
 
       if(!/application|image|video/.test(theFileType)) {
         request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: that.options.timeout, jar: that.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
