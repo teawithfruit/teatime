@@ -98,7 +98,7 @@ Teatime.prototype.open = function(theUrl) {
         writeIt = JSON.stringify(theData);
 
         fs.appendFile(that.resultPath, writeIt.substr(1, writeIt.length - 2) + ',\n', 'utf8', function() {
-          this.abort();
+          that.abort();
           workerPromise.resolve();
           that.crawl();
         });
@@ -113,7 +113,7 @@ Teatime.prototype.open = function(theUrl) {
 
       theFileType = fileType(chunk);
       if(theFileType) theFileType = theFileType.mime;
-      this.abort();
+      that.abort();
 
       if(!/application|image|video/.test(theFileType)) {
         request({ uri: urlParsed.href, simple: false, resolveWithFullResponse: true, timeout: that.options.timeout, jar: that.options.cookie, headers: { 'User-Agent': userAgentPrefix + ' ' + that.options.userAgent } })
